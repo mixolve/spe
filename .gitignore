@@ -1,6 +1,23 @@
+# Local build trees
 build/
+cmake-build-*/
+
+# IDE and OS files
 .DS_Store
 .idea/
 .vscode/
-cmake-build-*/
+
+# Local-only project notes
 conventions.md
+
+# Local plugin artefacts
+*.vst3
+*.component
+*.aaxplugin
+*.app
+*.pkg
+*.dSYM/
+
+# Allow intentionally versioned release artefacts under dist/
+!dist/
+!dist/**

@@ -97,3 +97,13 @@ target_link_libraries(Spe
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+set(SPE_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+set(SPE_DIST_VST3_DIR "${SPE_DIST_DIR}/spe.vst3")
+
+add_custom_command(TARGET Spe_VST3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${SPE_DIST_VST3_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${SPE_DIST_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:Spe_VST3>" "${SPE_DIST_VST3_DIR}"
+    VERBATIM
+)
