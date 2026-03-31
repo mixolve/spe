@@ -104,8 +104,14 @@ private:
     juce::AudioProcessorValueTreeState& valueTreeState;
     SpectrumAnalyserComponent spectrumAnalyser;
     ParameterControl dualMonoLeftThresholdControl;
+    ParameterControl dualMonoLeftAdaptiveControl;
+    ParameterControl dualMonoLeftAdaptiveOffsetControl;
     ParameterControl dualMonoRightThresholdControl;
+    ParameterControl dualMonoRightAdaptiveControl;
+    ParameterControl dualMonoRightAdaptiveOffsetControl;
     ParameterControl thresholdControl;
+    ParameterControl stereoAdaptiveControl;
+    ParameterControl stereoAdaptiveOffsetControl;
     ParameterControl inputGainControl;
     ParameterControl attackControl;
     ParameterControl releaseControl;

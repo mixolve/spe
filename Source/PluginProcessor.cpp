@@ -10,6 +10,9 @@ constexpr auto analyserMinFrequency = 20.0f;
 constexpr auto analyserMaxFrequency = 22000.0f;
 constexpr auto analyserMinDecibels = -120.0f;
 constexpr auto analyserMaxDecibels = 12.0f;
+constexpr auto analyserScopeStorageMinDecibels = -200.0f;
+constexpr auto stereoAdaptiveAttackMs = 30.0f;
+constexpr auto stereoAdaptiveReleaseMs = 300.0f;
 
 juce::String formatDecibelValue(const float value)
 {
@@ -52,8 +55,14 @@ SpeAudioProcessor::SpeAudioProcessor()
     slopeParam = parameters.getRawParameterValue(paramSlopeId);
     timeParam = parameters.getRawParameterValue(paramTimeId);
     thresholdParam = parameters.getRawParameterValue(paramThresholdId);
+    stereoAdaptiveParam = parameters.getRawParameterValue(paramStereoAdaptiveId);
+    stereoAdaptiveOffsetParam = parameters.getRawParameterValue(paramStereoAdaptiveOffsetId);
     dualMonoLeftThresholdParam = parameters.getRawParameterValue(paramDualMonoLeftThresholdId);
     dualMonoRightThresholdParam = parameters.getRawParameterValue(paramDualMonoRightThresholdId);
+    dualMonoLeftAdaptiveParam = parameters.getRawParameterValue(paramDualMonoLeftAdaptiveId);
+    dualMonoRightAdaptiveParam = parameters.getRawParameterValue(paramDualMonoRightAdaptiveId);
+    dualMonoLeftAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoLeftAdaptiveOffsetId);
+    dualMonoRightAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoRightAdaptiveOffsetId);
     inputGainParam = parameters.getRawParameterValue(paramInputGainId);
     attackParam = parameters.getRawParameterValue(paramAttackId);
     releaseParam = parameters.getRawParameterValue(paramReleaseId);
@@ -259,7 +268,11 @@ SpeAudioProcessor::DisplaySettings SpeAudioProcessor::getDisplaySettings() const
         right,
         juce::jlimit(analyserMinDecibels, analyserMaxDecibels - 6.0f, low),
         juce::jlimit(analyserMinDecibels + 6.0f, analyserMaxDecibels, high),
-        juce::jlimit(analyserMinDecibels, analyserMaxDecibels, thresholdParam != nullptr ? thresholdParam->load(std::memory_order_relaxed) : 12.0f),
+        juce::jlimit(analyserMinDecibels,
+                     analyserMaxDecibels,
+                     (stereoAdaptiveParam != nullptr && stereoAdaptiveParam->load(std::memory_order_relaxed) > 0.0f)
+                         ? spectralCompressor.getPublishedStereoThresholdDb()
+                         : (thresholdParam != nullptr ? thresholdParam->load(std::memory_order_relaxed) : 12.0f)),
         juce::jlimit(0.0f, 6.0f, slopeParam != nullptr ? slopeParam->load(std::memory_order_relaxed) : 4.0f)
     };
 }
@@ -275,8 +288,14 @@ SpeAudioProcessor::CompressorSettings SpeAudioProcessor::getCompressorSettings()
         getSelectedDspFftSize(),
         getSelectedOverlapFactor(),
         juce::jlimit(-120.0f, 12.0f, thresholdParam != nullptr ? thresholdParam->load(std::memory_order_relaxed) : 12.0f),
+        juce::jlimit(0.0f, 100.0f, stereoAdaptiveParam != nullptr ? stereoAdaptiveParam->load(std::memory_order_relaxed) : 0.0f),
+        juce::jlimit(0.0f, 48.0f, stereoAdaptiveOffsetParam != nullptr ? stereoAdaptiveOffsetParam->load(std::memory_order_relaxed) : 0.0f),
         juce::jlimit(-120.0f, 12.0f, dualMonoLeftThresholdParam != nullptr ? dualMonoLeftThresholdParam->load(std::memory_order_relaxed) : 12.0f),
         juce::jlimit(-120.0f, 12.0f, dualMonoRightThresholdParam != nullptr ? dualMonoRightThresholdParam->load(std::memory_order_relaxed) : 12.0f),
+        juce::jlimit(0.0f, 100.0f, dualMonoLeftAdaptiveParam != nullptr ? dualMonoLeftAdaptiveParam->load(std::memory_order_relaxed) : 0.0f),
+        juce::jlimit(0.0f, 100.0f, dualMonoRightAdaptiveParam != nullptr ? dualMonoRightAdaptiveParam->load(std::memory_order_relaxed) : 0.0f),
+        juce::jlimit(0.0f, 48.0f, dualMonoLeftAdaptiveOffsetParam != nullptr ? dualMonoLeftAdaptiveOffsetParam->load(std::memory_order_relaxed) : 0.0f),
+        juce::jlimit(0.0f, 48.0f, dualMonoRightAdaptiveOffsetParam != nullptr ? dualMonoRightAdaptiveOffsetParam->load(std::memory_order_relaxed) : 0.0f),
         isBypassEnabled(),
         dualMonoBypassParam != nullptr && juce::roundToInt(dualMonoBypassParam->load(std::memory_order_relaxed)) != 0,
         juce::jlimit(0.0f, 6.0f, dspSlopeParam != nullptr ? dspSlopeParam->load(std::memory_order_relaxed) : 4.0f),
@@ -373,10 +392,44 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeAudioProcessor::createPar
             })));
 
     parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramDualMonoLeftAdaptiveId, 1 },
+        "DUAL-MONO - LL-ADAPTIVE",
+        juce::NormalisableRange<float> { 0.0f, 100.0f, 1.0f },
+        0.0f));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramDualMonoLeftAdaptiveOffsetId, 1 },
+        "DUAL-MONO - LL-OFFSET",
+        juce::NormalisableRange<float> { 0.0f, 48.0f, 0.1f },
+        0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [] (float value, int)
+            {
+                return formatDecibelValue(value);
+            })));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { paramDualMonoRightThresholdId, 1 },
         "DUAL-MONO - RR-THRESHOLD",
         juce::NormalisableRange<float> { -120.0f, 12.0f, 0.1f },
         12.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [] (float value, int)
+            {
+                return formatDecibelValue(value);
+            })));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramDualMonoRightAdaptiveId, 1 },
+        "DUAL-MONO - RR-ADAPTIVE",
+        juce::NormalisableRange<float> { 0.0f, 100.0f, 1.0f },
+        0.0f));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramDualMonoRightAdaptiveOffsetId, 1 },
+        "DUAL-MONO - RR-OFFSET",
+        juce::NormalisableRange<float> { 0.0f, 48.0f, 0.1f },
+        0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [] (float value, int)
             {
@@ -393,6 +446,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeAudioProcessor::createPar
         "STEREO - THRESHOLD",
         juce::NormalisableRange<float> { -120.0f, 12.0f, 0.1f },
         12.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+            [] (float value, int)
+            {
+                return formatDecibelValue(value);
+            })));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramStereoAdaptiveId, 1 },
+        "STEREO - ADAPTIVE",
+        juce::NormalisableRange<float> { 0.0f, 100.0f, 1.0f },
+        0.0f));
+
+    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { paramStereoAdaptiveOffsetId, 1 },
+        "STEREO - OFFSET",
+        juce::NormalisableRange<float> { 0.0f, 48.0f, 0.1f },
+        0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [] (float value, int)
             {
@@ -641,6 +711,11 @@ void SpeAudioProcessor::SpectralCompressor::copyReductionScope(std::array<float,
     destination = reductionScopeBuffers[static_cast<size_t>(activeIndex)];
 }
 
+float SpeAudioProcessor::SpectralCompressor::getPublishedStereoThresholdDb() const noexcept
+{
+    return publishedStereoThresholdDb.load(std::memory_order_acquire);
+}
+
 void SpeAudioProcessor::SpectralCompressor::reset() noexcept
 {
     reconfigure(configuredChannels, currentFftSize, currentHopSize);
@@ -730,9 +805,20 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                                             static_cast<float>(hopSize) / static_cast<float>(sampleRate));
     const auto releaseCoefficient = calculateTimeCoefficient(settings.releaseMs,
                                                              static_cast<float>(hopSize) / static_cast<float>(sampleRate));
+    const auto adaptiveAttackCoefficient = calculateTimeCoefficient(stereoAdaptiveAttackMs,
+                                                                    static_cast<float>(hopSize) / static_cast<float>(sampleRate));
+    const auto adaptiveReleaseCoefficient = calculateTimeCoefficient(stereoAdaptiveReleaseMs,
+                                                                     static_cast<float>(hopSize) / static_cast<float>(sampleRate));
+    const auto adaptiveAmount = juce::jlimit(0.0f, 1.0f, settings.stereoAdaptiveAmount * 0.01f);
+    const auto adaptiveThresholdDb = stereoAdaptiveReferenceDb + settings.stereoAdaptiveOffsetDb;
+    const auto effectiveBaseStereoThresholdDb = juce::jmap(adaptiveAmount,
+                                                           settings.thresholdDb,
+                                                           adaptiveThresholdDb);
     const auto makeupGain = juce::Decibels::decibelsToGain(settings.makeupDb);
     const auto& window = windowTables[static_cast<size_t>(fftIndex)];
     auto& fft = *ffts[static_cast<size_t>(fftIndex)];
+    auto accumulatedStereoDetectorPower = 0.0;
+    std::array<double, maxChannels> accumulatedDualMonoDetectorPower {};
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
     {
@@ -763,7 +849,7 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                              (static_cast<float>(bin) * static_cast<float>(sampleRate))
                                                  / static_cast<float>(fftSize));
         const auto octavesAboveMin = std::log2(binFrequency / analyserMinFrequency);
-        const auto stereoThresholdDb = settings.thresholdDb
+        const auto stereoThresholdDb = effectiveBaseStereoThresholdDb
                                      - (settings.slopeDbPerOct * juce::jmax(0.0f, octavesAboveMin));
 
         for (auto channel = 0; channel < channelsToUse; ++channel)
@@ -779,9 +865,17 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
             }
 
             const auto channelThresholdDb = channel == 0 ? settings.leftThresholdDb : settings.rightThresholdDb;
+            const auto channelAdaptiveAmount = channel == 0 ? settings.leftAdaptiveAmount : settings.rightAdaptiveAmount;
+            const auto channelAdaptiveOffsetDb = channel == 0 ? settings.leftAdaptiveOffsetDb : settings.rightAdaptiveOffsetDb;
+            const auto dualMonoAdaptiveAmount = juce::jlimit(0.0f, 1.0f, channelAdaptiveAmount * 0.01f);
+            const auto adaptiveChannelThresholdDb = dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
+                                                  + channelAdaptiveOffsetDb;
+            const auto effectiveChannelThresholdDb = juce::jmap(dualMonoAdaptiveAmount,
+                                                                channelThresholdDb,
+                                                                adaptiveChannelThresholdDb);
             const auto channelLevelDb = juce::Decibels::gainToDecibels(channelMagnitudes[static_cast<size_t>(channel)], -120.0f);
             const auto desiredDualMonoReductionDb = calculateReductionDb(channelLevelDb,
-                                                                         channelThresholdDb,
+                                                                         effectiveChannelThresholdDb,
                                                                          settings.ratio,
                                                                          settings.kneeDb);
             const auto dualMonoCoefficient = desiredDualMonoReductionDb > smoothedDualMonoReduction ? attackCoefficient : releaseCoefficient;
@@ -789,6 +883,8 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                       + ((1.0f - dualMonoCoefficient) * desiredDualMonoReductionDb);
             dualMonoReductionDb[static_cast<size_t>(channel)] = smoothedDualMonoReduction;
             dualMonoGain[static_cast<size_t>(channel)] = juce::Decibels::decibelsToGain(-smoothedDualMonoReduction);
+            accumulatedDualMonoDetectorPower[static_cast<size_t>(channel)] += static_cast<double>(channelMagnitudes[static_cast<size_t>(channel)])
+                                                                            * static_cast<double>(channelMagnitudes[static_cast<size_t>(channel)]);
         }
 
         auto stereoDetectorMagnitude = 0.0f;
@@ -796,6 +892,8 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
         for (auto channel = 0; channel < channelsToUse; ++channel)
             stereoDetectorMagnitude = juce::jmax(stereoDetectorMagnitude,
                                                  channelMagnitudes[static_cast<size_t>(channel)] * dualMonoGain[static_cast<size_t>(channel)]);
+
+        accumulatedStereoDetectorPower += static_cast<double>(stereoDetectorMagnitude) * static_cast<double>(stereoDetectorMagnitude);
 
         auto& smoothedStereoReduction = stereoSmoothedReductionDb[static_cast<size_t>(bin)];
 
@@ -831,6 +929,31 @@ void SpeAudioProcessor::SpectralCompressor::processFrame(int channelsToUse,
                 frequencyData[static_cast<size_t>(fftSize - bin)] *= gain;
         }
     }
+
+    const auto processedBinCount = juce::jmax(1, (fftSize / 2) + 1);
+    const auto stereoDetectorRms = std::sqrt(accumulatedStereoDetectorPower / static_cast<double>(processedBinCount));
+    const auto desiredAdaptiveReferenceDb = juce::Decibels::gainToDecibels(static_cast<float>(stereoDetectorRms), analyserMinDecibels);
+    const auto adaptiveCoefficient = desiredAdaptiveReferenceDb > stereoAdaptiveReferenceDb
+        ? adaptiveAttackCoefficient
+        : adaptiveReleaseCoefficient;
+    stereoAdaptiveReferenceDb = (adaptiveCoefficient * stereoAdaptiveReferenceDb)
+                              + ((1.0f - adaptiveCoefficient) * desiredAdaptiveReferenceDb);
+
+    for (auto channel = 0; channel < channelsToUse; ++channel)
+    {
+        const auto dualMonoDetectorRms = std::sqrt(accumulatedDualMonoDetectorPower[static_cast<size_t>(channel)]
+                                                   / static_cast<double>(processedBinCount));
+        const auto desiredDualMonoAdaptiveReferenceDb = juce::Decibels::gainToDecibels(static_cast<float>(dualMonoDetectorRms),
+                                                                                        analyserMinDecibels);
+        const auto dualMonoAdaptiveCoefficient = desiredDualMonoAdaptiveReferenceDb > dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
+            ? adaptiveAttackCoefficient
+            : adaptiveReleaseCoefficient;
+        dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
+            = (dualMonoAdaptiveCoefficient * dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)])
+            + ((1.0f - dualMonoAdaptiveCoefficient) * desiredDualMonoAdaptiveReferenceDb);
+    }
+
+    publishedStereoThresholdDb.store(effectiveBaseStereoThresholdDb, std::memory_order_release);
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
     {
@@ -905,11 +1028,14 @@ void SpeAudioProcessor::SpectralCompressor::reconfigure(int channelsToUse, int f
     currentFftSize = fftSize;
     currentHopSize = hopSize;
     hopFill = 0;
+    stereoAdaptiveReferenceDb = 0.0f;
+    dualMonoAdaptiveReferenceDb.fill(0.0f);
     std::fill(stereoSmoothedReductionDb.begin(), stereoSmoothedReductionDb.end(), 0.0f);
     std::fill(combinedReductionDb.begin(), combinedReductionDb.end(), 0.0f);
     for (auto& channelReduction : dualMonoSmoothedReductionDb)
         std::fill(channelReduction.begin(), channelReduction.end(), 0.0f);
     activeReductionScopeBuffer.store(0, std::memory_order_relaxed);
+    publishedStereoThresholdDb.store(12.0f, std::memory_order_relaxed);
 
     for (auto& reductionScope : reductionScopeBuffers)
         std::fill(reductionScope.begin(), reductionScope.end(), 0.0f);
@@ -1010,7 +1136,7 @@ void SpeAudioProcessor::PostAnalyser::prepare(double newSampleRate)
     std::fill(smoothedMagnitudes.begin(), smoothedMagnitudes.end(), 0.0f);
 
     for (auto& scopeBuffer : scopeBuffers)
-        std::fill(scopeBuffer.begin(), scopeBuffer.end(), analyserMinDecibels);
+        std::fill(scopeBuffer.begin(), scopeBuffer.end(), analyserScopeStorageMinDecibels);
 }
 
 void SpeAudioProcessor::PostAnalyser::pushBuffer(const juce::AudioBuffer<float>& buffer,
@@ -1114,8 +1240,8 @@ void SpeAudioProcessor::PostAnalyser::generateSpectrum(int fftSize,
                               ? (smoothingCoefficient * smoothedMagnitude)
                                   + ((1.0f - smoothingCoefficient) * rawMagnitude)
                               : rawMagnitude;
-        scopeBuffer[static_cast<size_t>(i)] = juce::Decibels::gainToDecibels(juce::jmax(smoothedMagnitude, 1.0e-8f),
-                                                                             analyserMinDecibels);
+        scopeBuffer[static_cast<size_t>(i)] = juce::Decibels::gainToDecibels(juce::jmax(smoothedMagnitude, 1.0e-10f),
+                                                                             analyserScopeStorageMinDecibels);
     }
 
     activeScopeBuffer.store(writeIndex, std::memory_order_release);

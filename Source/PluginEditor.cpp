@@ -24,6 +24,7 @@ constexpr int parameterValueWidth = 94;
 constexpr int parameterNameWidth = controlRowWidth - parameterGap - parameterValueWidth;
 constexpr auto analyserMinFrequency = 20.0f;
 constexpr auto analyserMaxFrequency = 22000.0f;
+constexpr auto analyserSlopeReferenceFrequency = 632.455532f;
 constexpr float uiFontSize = 20.0f;
 constexpr float valueBoxDragNormalisedPerPixel = 0.0050f;
 constexpr float smoothWheelStepThreshold = 0.030f;
@@ -805,10 +806,10 @@ void SpectrumAnalyserComponent::paint(juce::Graphics& g)
                                                    sampleScopeAtFrequency(gainReductionData,
                                                                           frequency,
                                                                           visibleRange.sourceMaximumHz));
-        const auto octavesAboveMin = std::log2(frequency / analyserMinFrequency);
-        const auto displaySlopeOffset = displaySettings.slopeDbPerOct * juce::jmax(0.0f, octavesAboveMin);
+        const auto octavesFromSlopeReference = std::log2(frequency / analyserSlopeReferenceFrequency);
+        const auto displaySlopeOffset = displaySettings.slopeDbPerOct * octavesFromSlopeReference;
         const auto thresholdDbAtFrequency = displaySettings.thresholdDb;
-        const auto postDecibels = sampledDecibels - displaySlopeOffset;
+        const auto postDecibels = sampledDecibels + displaySlopeOffset;
         const auto postY = decibelsToY(postDecibels, plotBounds);
         const auto thresholdY = decibelsToY(thresholdDbAtFrequency, plotBounds);
         const auto reductionY = decibelsToY(thresholdDbAtFrequency - sampledReductionDb, plotBounds);
@@ -897,8 +898,14 @@ SpeAudioProcessorEditor::SpeAudioProcessorEditor(SpeAudioProcessor& p)
       valueTreeState(p.getValueTreeState()),
       spectrumAnalyser(p),
       dualMonoLeftThresholdControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoLeftThresholdId, "LL-THRESHOLD"),
+      dualMonoLeftAdaptiveControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoLeftAdaptiveId, "LL-ADAPTIVE"),
+      dualMonoLeftAdaptiveOffsetControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoLeftAdaptiveOffsetId, "LL-OFFSET"),
       dualMonoRightThresholdControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoRightThresholdId, "RR-THRESHOLD"),
+      dualMonoRightAdaptiveControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoRightAdaptiveId, "RR-ADAPTIVE"),
+      dualMonoRightAdaptiveOffsetControl(p.getValueTreeState(), SpeAudioProcessor::paramDualMonoRightAdaptiveOffsetId, "RR-OFFSET"),
       thresholdControl(p.getValueTreeState(), SpeAudioProcessor::paramThresholdId, "THRESHOLD"),
+      stereoAdaptiveControl(p.getValueTreeState(), SpeAudioProcessor::paramStereoAdaptiveId, "ADAPTIVE"),
+      stereoAdaptiveOffsetControl(p.getValueTreeState(), SpeAudioProcessor::paramStereoAdaptiveOffsetId, "OFFSET"),
       inputGainControl(p.getValueTreeState(), SpeAudioProcessor::paramInputGainId, "IN-GAIN"),
       attackControl(p.getValueTreeState(), SpeAudioProcessor::paramAttackId, "ATTACK"),
       releaseControl(p.getValueTreeState(), SpeAudioProcessor::paramReleaseId, "RELEASE"),
@@ -1018,8 +1025,14 @@ SpeAudioProcessorEditor::SpeAudioProcessorEditor(SpeAudioProcessor& p)
     };
     addAndMakeVisible(*analyserVisibilityButton);
     addAndMakeVisible(dualMonoLeftThresholdControl);
+    addAndMakeVisible(dualMonoLeftAdaptiveControl);
+    addAndMakeVisible(dualMonoLeftAdaptiveOffsetControl);
     addAndMakeVisible(dualMonoRightThresholdControl);
+    addAndMakeVisible(dualMonoRightAdaptiveControl);
+    addAndMakeVisible(dualMonoRightAdaptiveOffsetControl);
     addAndMakeVisible(thresholdControl);
+    addAndMakeVisible(stereoAdaptiveControl);
+    addAndMakeVisible(stereoAdaptiveOffsetControl);
     addAndMakeVisible(inputGainControl);
     addAndMakeVisible(attackControl);
     addAndMakeVisible(releaseControl);
@@ -1152,6 +1165,10 @@ void SpeAudioProcessorEditor::updateSectionStates()
 {
     const auto dualMonoSectionChanged = dualMonoLeftThresholdControl.isChangedFromDefault()
         || dualMonoRightThresholdControl.isChangedFromDefault()
+        || dualMonoLeftAdaptiveControl.isChangedFromDefault()
+        || dualMonoRightAdaptiveControl.isChangedFromDefault()
+        || dualMonoLeftAdaptiveOffsetControl.isChangedFromDefault()
+        || dualMonoRightAdaptiveOffsetControl.isChangedFromDefault()
         || isParameterChangedFromDefault(valueTreeState, SpeAudioProcessor::paramDualMonoBypassId);
 
     if (dualMonoHeader != nullptr)
@@ -1161,6 +1178,8 @@ void SpeAudioProcessorEditor::updateSectionStates()
     }
 
     const auto stereoSectionChanged = thresholdControl.isChangedFromDefault()
+        || stereoAdaptiveControl.isChangedFromDefault()
+        || stereoAdaptiveOffsetControl.isChangedFromDefault()
         || isParameterChangedFromDefault(valueTreeState, SpeAudioProcessor::paramBypassId);
 
     if (stereoHeader != nullptr)
@@ -1218,9 +1237,15 @@ void SpeAudioProcessorEditor::updateSectionStates()
         deltaButton->setVisible(globalExpanded);
     dualMonoLeftThresholdControl.setVisible(dualMonoExpanded);
     dualMonoRightThresholdControl.setVisible(dualMonoExpanded);
+    dualMonoLeftAdaptiveControl.setVisible(dualMonoExpanded);
+    dualMonoRightAdaptiveControl.setVisible(dualMonoExpanded);
+    dualMonoLeftAdaptiveOffsetControl.setVisible(dualMonoExpanded);
+    dualMonoRightAdaptiveOffsetControl.setVisible(dualMonoExpanded);
     if (dualMonoBypassButton != nullptr)
         dualMonoBypassButton->setVisible(dualMonoExpanded);
     thresholdControl.setVisible(stereoExpanded);
+    stereoAdaptiveControl.setVisible(stereoExpanded);
+    stereoAdaptiveOffsetControl.setVisible(stereoExpanded);
     if (bypassButton != nullptr)
         bypassButton->setVisible(stereoExpanded);
     fftSizeControl.setVisible(analyserExpanded);
@@ -1291,7 +1316,11 @@ void SpeAudioProcessorEditor::resized()
     if (dualMonoExpanded)
     {
         placeControl(dualMonoLeftThresholdControl);
+        placeControl(dualMonoLeftAdaptiveControl);
+        placeControl(dualMonoLeftAdaptiveOffsetControl);
         placeControl(dualMonoRightThresholdControl);
+        placeControl(dualMonoRightAdaptiveControl);
+        placeControl(dualMonoRightAdaptiveOffsetControl);
 
         if (dualMonoBypassButton != nullptr)
         {
@@ -1311,6 +1340,8 @@ void SpeAudioProcessorEditor::resized()
     if (stereoExpanded)
     {
         placeControl(thresholdControl);
+        placeControl(stereoAdaptiveControl);
+        placeControl(stereoAdaptiveOffsetControl);
 
         if (bypassButton != nullptr)
         {

@@ -31,8 +31,14 @@ public:
         int fftSize = 8192;
         int overlapFactor = 32;
         float thresholdDb = 12.0f;
+        float stereoAdaptiveAmount = 0.0f;
+        float stereoAdaptiveOffsetDb = 0.0f;
         float leftThresholdDb = 12.0f;
         float rightThresholdDb = 12.0f;
+        float leftAdaptiveAmount = 0.0f;
+        float rightAdaptiveAmount = 0.0f;
+        float leftAdaptiveOffsetDb = 0.0f;
+        float rightAdaptiveOffsetDb = 0.0f;
         bool stereoBypass = false;
         bool dualMonoBypass = false;
         float slopeDbPerOct = 4.0f;
@@ -52,8 +58,14 @@ public:
     inline static constexpr auto paramSlopeId = "slope";
     inline static constexpr auto paramTimeId = "time";
     inline static constexpr auto paramThresholdId = "threshold";
+    inline static constexpr auto paramStereoAdaptiveId = "stereo_adaptive";
+    inline static constexpr auto paramStereoAdaptiveOffsetId = "stereo_adaptive_offset";
     inline static constexpr auto paramDualMonoLeftThresholdId = "dual_mono_left_threshold";
     inline static constexpr auto paramDualMonoRightThresholdId = "dual_mono_right_threshold";
+    inline static constexpr auto paramDualMonoLeftAdaptiveId = "dual_mono_left_adaptive";
+    inline static constexpr auto paramDualMonoRightAdaptiveId = "dual_mono_right_adaptive";
+    inline static constexpr auto paramDualMonoLeftAdaptiveOffsetId = "dual_mono_left_adaptive_offset";
+    inline static constexpr auto paramDualMonoRightAdaptiveOffsetId = "dual_mono_right_adaptive_offset";
     inline static constexpr auto paramInputGainId = "input_gain";
     inline static constexpr auto paramAttackId = "attack";
     inline static constexpr auto paramReleaseId = "release";
@@ -165,6 +177,7 @@ private:
         void prepare(double newSampleRate, int numChannels);
         void processBuffer(juce::AudioBuffer<float>& buffer, int numInputChannels, const CompressorSettings& settings);
         void copyReductionScope(std::array<float, analyserScopeSize>& destination) const;
+        float getPublishedStereoThresholdDb() const noexcept;
         void reset() noexcept;
 
     private:
@@ -203,7 +216,10 @@ private:
         std::array<float, (maxFftSize / 2) + 1> combinedReductionDb {};
         std::array<std::array<float, analyserScopeSize>, 2> reductionScopeBuffers {};
         std::atomic<int> activeReductionScopeBuffer { 0 };
+        std::atomic<float> publishedStereoThresholdDb { 12.0f };
         double sampleRate = 44100.0;
+        float stereoAdaptiveReferenceDb = 0.0f;
+        std::array<float, maxChannels> dualMonoAdaptiveReferenceDb {};
         int configuredChannels = 0;
         int currentFftSize = 0;
         int currentHopSize = 0;
@@ -220,8 +236,14 @@ private:
     std::atomic<float>* slopeParam = nullptr;
     std::atomic<float>* timeParam = nullptr;
     std::atomic<float>* thresholdParam = nullptr;
+    std::atomic<float>* stereoAdaptiveParam = nullptr;
+    std::atomic<float>* stereoAdaptiveOffsetParam = nullptr;
     std::atomic<float>* dualMonoLeftThresholdParam = nullptr;
     std::atomic<float>* dualMonoRightThresholdParam = nullptr;
+    std::atomic<float>* dualMonoLeftAdaptiveParam = nullptr;
+    std::atomic<float>* dualMonoRightAdaptiveParam = nullptr;
+    std::atomic<float>* dualMonoLeftAdaptiveOffsetParam = nullptr;
+    std::atomic<float>* dualMonoRightAdaptiveOffsetParam = nullptr;
     std::atomic<float>* inputGainParam = nullptr;
     std::atomic<float>* attackParam = nullptr;
     std::atomic<float>* releaseParam = nullptr;
