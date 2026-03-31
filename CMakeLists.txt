@@ -56,6 +56,13 @@ else()
     FetchContent_MakeAvailable(juce)
 endif()
 
+juce_add_binary_data(spe_assets
+    SOURCES
+        assets/fonts/SometypeMono-Bold.ttf
+        assets/fonts/SometypeMono-Regular.ttf
+        assets/fonts/SometypeMono-OFL.txt
+)
+
 juce_add_plugin(Spe
     COMPANY_NAME "mixolve"
     BUNDLE_ID "com.mixolve.spe"
@@ -91,7 +98,9 @@ target_compile_definitions(Spe
 
 target_link_libraries(Spe
     PRIVATE
+        spe_assets
         juce::juce_audio_utils
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
