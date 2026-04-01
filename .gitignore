@@ -18,6 +18,7 @@ conventions.md
 *.pkg
 *.dSYM/
 
-# Allow intentionally versioned release artefacts under dist/
+# Keep the dist directory itself, but ignore generated release payloads
 !dist/
-!dist/**
+dist/*
+!dist/.gitkeep
