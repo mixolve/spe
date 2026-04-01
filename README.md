@@ -1,5 +1,3 @@
 # spe
 
-[Latest macOS build](https://github.com/mixolve/spe/releases/latest/download/spe-macos.zip)
-
-[All releases](https://github.com/mixolve/spe/releases)
+[latest version (currently macOS only)](https://github.com/mixolve/spe/releases/latest/download/spe-macos.zip)
