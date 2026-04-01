@@ -18,7 +18,6 @@ conventions.md
 *.pkg
 *.dSYM/
 
-# Keep the dist directory itself, but ignore generated release payloads
-!dist/
-dist/*
-!dist/.gitkeep
+# Generated release packages
+/spe-*.zip
+/dist/

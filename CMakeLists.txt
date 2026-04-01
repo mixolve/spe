@@ -114,23 +114,21 @@ target_link_libraries(Spe
         juce::juce_recommended_warning_flags
 )
 
-set(SPE_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dist")
-set(SPE_DIST_VST3_DIR "${SPE_DIST_DIR}/spe.vst3")
+set(SPE_PACKAGE_STAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/spe.vst3")
 
 if(APPLE)
-    set(SPE_DIST_ZIP_PATH "${SPE_DIST_DIR}/spe-macos.zip")
+    set(SPE_PACKAGE_ZIP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/spe-macos.zip")
 elseif(WIN32)
-    set(SPE_DIST_ZIP_PATH "${SPE_DIST_DIR}/spe-windows.zip")
+    set(SPE_PACKAGE_ZIP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/spe-windows.zip")
 else()
-    set(SPE_DIST_ZIP_PATH "${SPE_DIST_DIR}/spe.zip")
+    set(SPE_PACKAGE_ZIP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/spe.zip")
 endif()
 
 add_custom_command(TARGET Spe_VST3 POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "${SPE_DIST_VST3_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${SPE_DIST_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:Spe_VST3>" "${SPE_DIST_VST3_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E rm -f "${SPE_DIST_ZIP_PATH}"
-    COMMAND ${CMAKE_COMMAND} -E chdir "${SPE_DIST_DIR}" ${CMAKE_COMMAND} -E tar "cf" "${SPE_DIST_ZIP_PATH}" --format=zip -- "spe.vst3"
-    COMMAND ${CMAKE_COMMAND} -E rm -rf "${SPE_DIST_VST3_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${SPE_PACKAGE_STAGE_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_BUNDLE_DIR:Spe_VST3>" "${SPE_PACKAGE_STAGE_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E rm -f "${SPE_PACKAGE_ZIP_PATH}"
+    COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_COMMAND} -E tar "cf" "${SPE_PACKAGE_ZIP_PATH}" --format=zip -- "spe.vst3"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${SPE_PACKAGE_STAGE_DIR}"
     VERBATIM
 )
