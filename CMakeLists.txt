@@ -90,10 +90,10 @@ juce_generate_juce_header(Spe)
 
 target_sources(Spe
     PRIVATE
-        Source/PluginEditor.cpp
-        Source/PluginEditor.h
-        Source/PluginProcessor.cpp
-        Source/PluginProcessor.h
+        source/PluginEditor.cpp
+        source/PluginEditor.h
+        source/PluginProcessor.cpp
+        source/PluginProcessor.h
 )
 
 target_compile_definitions(Spe
