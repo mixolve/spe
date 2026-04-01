@@ -2,47 +2,14 @@
 
 [latest version (currently macOS only)](https://github.com/mixolve/spe/releases/latest/download/spe-macos.zip)
 
-spe is a spectral dynamics processor with separate `DUAL-MONO` and `STEREO` stages, global DSP controls, and a post-processing spectrum analyser.
+spe is a spectral dynamics processor focused on frequency-dependent control with a compact workflow and a direct visual read of what the DSP is doing.
 
-Current functions:
+key features:
 
-- `DUAL-MONO`
-- independent `LL-THRESHOLD` and `RR-THRESHOLD`
-- independent `LL-ADAPTIVE` and `RR-ADAPTIVE`
-- independent `LL-OFFSET` and `RR-OFFSET`
-- stage `BYPASS`
-
-- `STEREO`
-- linked stereo `THRESHOLD`
-- linked stereo `ADAPTIVE`
-- linked stereo `OFFSET`
-- stage `BYPASS`
-
-- `GLOBAL`
-- `IN-GAIN`
-- `ATTACK`
-- `RELEASE`
-- `KNEE`
-- `RATIO`
-- DSP `WINDOW-SIZE`
-- DSP `SLOPE`
-- `OUT-GAIN`
-- `DELTA`
-
-- `ANALYSER`
-- analyser `FFT-SIZE`
-- analyser `OVERLAP`
-- horizontal range: `LEFT`, `RIGHT`
-- vertical range: `LOW`, `HIGH`
-- display `SLOPE`
-- time averaging `TIME`
-- `HIDE`
-
-- processing / behaviour
 - spectral compression per FFT bin
-- separate `DUAL-MONO` and `STEREO` processing stages
-- adaptive threshold mode for `DUAL-MONO` and `STEREO`
-- post-processed spectrum display
-- gain reduction overlay
-- latency-reported DSP windowing
-- delta monitoring
+- separate `DUAL-MONO` and `STEREO` stages
+- adaptive threshold modes for linked and independent channel processing
+- independent DSP and analyser FFT / slope controls
+- configurable analyser with optional hide mode for a more compact view
+- post-processing spectrum display with gain reduction overlay
+- delta monitoring for hearing removed content
