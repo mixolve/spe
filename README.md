@@ -11,5 +11,4 @@ key features:
 - adaptive threshold modes for linked and independent channel processing
 - independent DSP and analyser FFT / slope controls
 - configurable analyser with optional hide mode for a more compact view
-- post-processing spectrum display with gain reduction overlay
 - delta monitoring for hearing removed content
