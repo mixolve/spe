@@ -11,31 +11,6 @@ option(MIXOLVE_SPE_USE_LOCAL_JUCE "Use a local JUCE checkout via JUCE_DIR" OFF)
 if(APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "macOS architectures" FORCE)
-
-    execute_process(
-        COMMAND xcrun --sdk macosx --show-sdk-path
-        OUTPUT_VARIABLE MIXOLVE_SPE_MACOS_SDK_PATH
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-
-    if(MIXOLVE_SPE_MACOS_SDK_PATH
-       AND NOT EXISTS "${MIXOLVE_SPE_MACOS_SDK_PATH}/System/Library/Frameworks/Foundation.framework/Headers/NSGarbageCollector.h")
-        set(MIXOLVE_SPE_APPLE_SDK_SHIMS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/apple-sdk-shims")
-        set(MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG "-isystem${MIXOLVE_SPE_APPLE_SDK_SHIMS_DIR}")
-
-        string(APPEND CMAKE_C_FLAGS " ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        string(APPEND CMAKE_CXX_FLAGS " ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        string(APPEND CMAKE_OBJC_FLAGS " ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        string(APPEND CMAKE_OBJCXX_FLAGS " ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-
-        set(ENV{CFLAGS} "$ENV{CFLAGS} ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        set(ENV{CXXFLAGS} "$ENV{CXXFLAGS} ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        set(ENV{OBJCFLAGS} "$ENV{OBJCFLAGS} ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-        set(ENV{OBJCXXFLAGS} "$ENV{OBJCXXFLAGS} ${MIXOLVE_SPE_APPLE_SDK_SHIM_FLAG}")
-
-        message(STATUS "Using local Foundation shim for missing NSGarbageCollector.h")
-    endif()
 endif()
 
 if(MIXOLVE_SPE_USE_LOCAL_JUCE)
